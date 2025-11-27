@@ -6,6 +6,8 @@ from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, R
 import data
 import acessories
 from Autodesk.Revit.DB import FilteredElementCollector, BuiltInCategory
+import csv
+import os
 
 FEAT_TO_METER_MUTIPLY = 0.304785126
 
@@ -23,14 +25,11 @@ LENGHTNAME = 'lenght'
 VOLNAME = 'vol'
 
 
-PVC_DENSITY = 1400  # kg/m³
+# PVC_DENSITY = 1400  # kg/m³
 PVC_DENSITY_Map = {
-    "UnMEP_PVC Branco - Série Normal": 1320,
+    "Tubo de PVC Esgoto Série Normal": 1400,
+    'Tubo de PVC Marrom Soldável':1300,
 }
-
-EnergiaPerMeter = 1.2
-CO2PerKg = 2.5
-WatherPerKg = .57
 
 finalDataDecode = {
     LENGHTNAME: "Comprimento de tubulação",
@@ -265,21 +264,6 @@ def map_pipes_to_accessories():
 
 pipe_acessories_map = map_pipes_to_accessories()
 
-# import os
-# filename = 'assesorios.txt'
-# # print(assesorios)
-# try:
-#     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-#     filepath = os.path.join(desktop, filename)
-#     with open(filepath, "w") as f:
-#         f.write("Relatório de Acessórios\n")
-#         f.write("========================\n\n")
-#         for key, value in assesorios.items():
-#             f.write("{}: {}\n".format(key, value))
-#     os.startfile(filepath) 
-# except Exception as e:
-#     pass
-
 metricsData = {
     "Comprimento de tubulação": {
         "data": {},
@@ -303,7 +287,7 @@ metricsData = {
 
 for resultKey, resultVal in resultados.items():
     # TotalMass = resultados.volTotal * FEAT_TO_METER_MUTIPLY * PVC_DENSITY
-    TotalMass = resultVal[VOLNAME] * PVC_DENSITY
+    TotalMass = resultVal[VOLNAME] * PVC_DENSITY_Map[resultKey]
 
     for (key, val) in finalDataDecode.items():
         toAddVal = resultVal[key]
@@ -311,11 +295,6 @@ for resultKey, resultVal in resultados.items():
     
     _help_set_data_on_dict(metricsData[FINAL_DATA_MASS_KEY], resultKey, TotalMass, DECODE_FINALDATA_UNIT[FINAL_DATA_MASS_KEY])
 
-    # window = DataGridWindow({
-    #     "Comprimento total": resultVal["totalLenght"],
-    #     "Volume total": resultVal["totalVol"],
-    #     "Peso total": resultVal,
-    # })
 acessoriosDict = metricsData['Acessorios']
 for key, value in assesorios.items():
     acessoriosDict['total'] += value
@@ -323,6 +302,45 @@ for key, value in assesorios.items():
 
 
 finalData = {}
+
+# #massa no print
+# finalData['Massa'] = {
+#     'unit': 'KG',
+#     "total": {},
+#     "data": {}
+# }
+
+# print(metricsData[FINAL_DATA_MASS_KEY])
+
+# curData = finalData['Massa']['data']
+# for pipeData in metricsData[FINAL_DATA_MASS_KEY]['data']:
+    # if pipeData not in finalData:
+    #     curData[pipeData] = {}
+    # pipePeformaceData = data.dataPerKg['Potencial de aquecimento global (total) ']['data'][pipeData]
+    # for estage in pipePeformaceData:
+    #     if estage not in curData[pipeData]:
+    #         curData[pipeData][estage] = 0
+    #     curData[pipeData][estage] += metricsData[FINAL_DATA_MASS_KEY]['data'][pipeData]
+
+
+    # if (pipeData in pipe_acessories_map):
+    #     curData['{} - Acessorios'.format(pipeData)] = {}
+    #     curAccessoryData = curData['{} - Acessorios'.format(pipeData)]
+    #     for accessory in pipe_acessories_map[pipeData]:
+    #         if (accessory in acessories.dataAcessories):
+    #             accessoryMass = acessories.dataAcessories[accessory] * pipe_acessories_map[pipeData][accessory]
+    #             for estage in pipePeformaceData:
+    #                 if estage not in curAccessoryData:
+    #                     curAccessoryData[estage] = 0
+    #                 curAccessoryData[estage] += accessoryMass
+#
+# curData = finalData['Massa']['total']
+# for perfData in finalData['Massa']['data']:
+    # for key in curData:
+    #     if (key in curData[perfData]):
+    #         curData[perfData][key] = 0
+    #     curData[key] += curData[perfData][key]
+
 
 for peformaceName, peformaceData in data.dataPerKg.items():
     finalData[peformaceName] = {
@@ -361,6 +379,46 @@ for peformaceName, peformaceData in data.dataPerKg.items():
     for perfData in finalData[peformaceName]['data']:
         for key in peformaceKeySet:
             curData[key] += finalData[peformaceName]['data'][perfData][key]
+
+
+def write_csv(filename, data_dict):
+    with open(filename, mode="w") as f:
+        writer = csv.writer(f)
+
+        header = ["Metrica", "Unidade"] + DataGridWindow.colsName
+        writer.writerow(header)
+
+        for key, data_val in data_dict.items():
+            totals = data_val["total"]
+            row = [key, data_val["unit"]]
+            for fase in DataGridWindow.colsName:
+                val = totals.get(fase, 0)
+                row.append("{:.2f}".format(val) if isinstance(val, float) else str(val))
+            writer.writerow(row)
+
+            for subKey, subVal in data_val["data"].items():
+                row = ["{}:".format(subKey), data_val["unit"]]
+                for fase in DataGridWindow.colsName:
+                    val = subVal.get(fase, 0)
+                    row.append("{:.2f}".format(val) if isinstance(val, float) else str(val))
+                writer.writerow(row)
+
+# # print(assesorios)
+# try:
+#     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+#     filepath = os.path.join(desktop, filename)
+#     with open(filepath, "w") as f:
+#         f.write("Relatório de Acessórios\n")
+#         f.write("========================\n\n")
+#         for key, value in assesorios.items():
+#             f.write("{}: {}\n".format(key, value))
+#     os.startfile(filepath) 
+# except Exception as e:
+#     pass
+filename = 'Data.csv'
+desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+filepath = os.path.join(desktop, filename)
+write_csv(filepath, finalData)
 
 window = DataGridWindow(finalData)
 window.ShowDialog()
