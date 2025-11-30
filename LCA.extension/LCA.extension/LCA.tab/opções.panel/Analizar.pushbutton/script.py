@@ -2,7 +2,8 @@
 from pyrevit import revit, DB, forms, script
 import math
 from System.Windows import Window, Thickness, FontWeights, HorizontalAlignment, VerticalAlignment, GridLength, GridUnitType
-from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility
+from System.Windows.Controls import Label, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, StackPanel
+from System.Windows.Media import RotateTransform
 import data
 import acessories
 from Autodesk.Revit.DB import FilteredElementCollector, BuiltInCategory
@@ -128,13 +129,31 @@ def coletar_assesorios():
 
 class DataGridWindow(Window):
     colsName = ["A1-A3", "A4", "A5", "C1", "C2", "C3", "C4", "D"]
+    colsName_tooltip = ["Produção", "Transporte", "Instalação", "Demolição", "Transporte", "Processamento \nde resíduos", "Destinação final", "Estágio \nde Recuperação"]
     def __init__(self, data_dict):
         super(DataGridWindow, self).__init__()
         self.Title = "Resumo dos Tubos"
         self.MaxWidth = 1280
         self.MaxHeight = 720
 
-        # Create grid
+        scroll_viewer = ScrollViewer()
+        scroll_viewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        self.Content = scroll_viewer
+        # scroll_viewer.Content = grid
+        
+        stack = StackPanel()
+        stack.Margin = Thickness(10)
+        stack.VerticalAlignment = VerticalAlignment.Top
+        scroll_viewer.Content = stack
+
+        grid = self._make_baseTable(data_dict)
+        stack.Children.Add(grid)
+        
+        grid = self._build_system_boundaries_table()
+        stack.Children.Add(grid)
+
+    
+    def _make_baseTable(self, data_dict):
         grid = Grid()
         grid.Margin = Thickness(18)
 
@@ -156,6 +175,14 @@ class DataGridWindow(Window):
             grid.ColumnDefinitions.Add(colDef)
         
         current_row = 0
+        cur_col = 2
+        for n, fase in enumerate(DataGridWindow.colsName):
+            label = self.create_vertical_header(self.colsName_tooltip[n])
+            Grid.SetRow(label, current_row)
+            Grid.SetColumn(label, cur_col)
+            grid.Children.Add(label)
+            cur_col+=1
+        current_row+=1
 
         grid.RowDefinitions.Add(RowDefinition())
         grid.Children.Add(self._make_label("Metrica", current_row, 0, bold=True))
@@ -196,12 +223,18 @@ class DataGridWindow(Window):
                     grid.Children.Add(self._make_label(val_str, current_row, cur_col))
                     cur_col += 1
                 current_row+=1
+        
+        return grid
 
-        scroll_viewer = ScrollViewer()
-        scroll_viewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        scroll_viewer.Content = grid
-
-        self.Content = scroll_viewer
+    def create_vertical_header(self, text):
+        tb = Label()
+        tb.Width = 120
+        tb.Content = text
+        tb.LayoutTransform = RotateTransform(270)
+        tb.Margin = Thickness(5)
+        tb.HorizontalAlignment = HorizontalAlignment.Stretch
+        tb.VerticalAlignment = VerticalAlignment.Center
+        return tb
 
     def _make_label(self, text, row, col, bold=False):
         label = Label()
@@ -214,6 +247,60 @@ class DataGridWindow(Window):
         Grid.SetRow(label, row)
         Grid.SetColumn(label, col)
         return label
+
+    def _build_system_boundaries_table(self):
+        grid = Grid()
+
+        # Define colunas
+        for col in range(3):  # Estágio, Módulo, Declarado
+            grid.ColumnDefinitions.Add(ColumnDefinition())
+
+        # Dados da tabela
+        rows = [
+            ("Estágio de Produção", "A1 - Fornecimento de matéria-prima"),
+            ("", "A2 - Transporte"),
+            ("", "A3 - Fabricação"),
+            ("Estágio de Construção", "A4 - Transporte"),
+            ("", "A5 - Instalação"),
+            ("Estágio de Uso", "B1 - Uso"),
+            ("", "B2 - Manutenção"),
+            ("", "B3 - Reparo"),
+            ("", "B4 - Substituição"),
+            ("", "B5 - Reforma"),
+            ("", "B6 - Consumo de energia operacional"),
+            ("", "B7 - Consumo de água operacional"),
+            ("Estágio de Fim de Vida", "C1 - Desconstrução/Demolição"),
+            ("", "C2 - Transporte"),
+            ("", "C3 - Processamento de resíduos"),
+            ("", "C4 - Destinação final"),
+            ("Estágio de Recuperação", "D - Benefícios e cargas além dos limites do sistema"),
+        ]
+
+        # Adiciona linhas
+        for i in range(len(rows)):
+            grid.RowDefinitions.Add(RowDefinition())
+
+        # Preenche a grade
+        for i, (stage, module) in enumerate(rows):
+            # Estágio
+            lbl_stage = Label()
+            lbl_stage.Content = stage
+            lbl_stage.FontWeight = FontWeights.Bold if stage else FontWeights.Normal
+            lbl_stage.Margin = Thickness(5)
+            lbl_stage.VerticalAlignment = VerticalAlignment.Center
+            grid.Children.Add(lbl_stage)
+            Grid.SetRow(lbl_stage, i)
+            Grid.SetColumn(lbl_stage, 0)
+
+            # Módulo
+            lbl_module = Label()
+            lbl_module.Content = module
+            lbl_module.Margin = Thickness(5)
+            grid.Children.Add(lbl_module)
+            Grid.SetRow(lbl_module, i)
+            Grid.SetColumn(lbl_module, 1)
+
+        return grid
 
 def _help_set_data_on_dict(dict, resultKey, val_to_add, baseUnit):
     dict['total'] += val_to_add
@@ -303,45 +390,6 @@ for key, value in assesorios.items():
 
 finalData = {}
 
-# #massa no print
-# finalData['Massa'] = {
-#     'unit': 'KG',
-#     "total": {},
-#     "data": {}
-# }
-
-# print(metricsData[FINAL_DATA_MASS_KEY])
-
-# curData = finalData['Massa']['data']
-# for pipeData in metricsData[FINAL_DATA_MASS_KEY]['data']:
-    # if pipeData not in finalData:
-    #     curData[pipeData] = {}
-    # pipePeformaceData = data.dataPerKg['Potencial de aquecimento global (total) ']['data'][pipeData]
-    # for estage in pipePeformaceData:
-    #     if estage not in curData[pipeData]:
-    #         curData[pipeData][estage] = 0
-    #     curData[pipeData][estage] += metricsData[FINAL_DATA_MASS_KEY]['data'][pipeData]
-
-
-    # if (pipeData in pipe_acessories_map):
-    #     curData['{} - Acessorios'.format(pipeData)] = {}
-    #     curAccessoryData = curData['{} - Acessorios'.format(pipeData)]
-    #     for accessory in pipe_acessories_map[pipeData]:
-    #         if (accessory in acessories.dataAcessories):
-    #             accessoryMass = acessories.dataAcessories[accessory] * pipe_acessories_map[pipeData][accessory]
-    #             for estage in pipePeformaceData:
-    #                 if estage not in curAccessoryData:
-    #                     curAccessoryData[estage] = 0
-    #                 curAccessoryData[estage] += accessoryMass
-#
-# curData = finalData['Massa']['total']
-# for perfData in finalData['Massa']['data']:
-    # for key in curData:
-    #     if (key in curData[perfData]):
-    #         curData[perfData][key] = 0
-    #     curData[key] += curData[perfData][key]
-
-
 for peformaceName, peformaceData in data.dataPerKg.items():
     finalData[peformaceName] = {
         'unit': peformaceData['unit'],
@@ -403,18 +451,6 @@ def write_csv(filename, data_dict):
                     row.append("{:.2f}".format(val) if isinstance(val, float) else str(val))
                 writer.writerow(row)
 
-# # print(assesorios)
-# try:
-#     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-#     filepath = os.path.join(desktop, filename)
-#     with open(filepath, "w") as f:
-#         f.write("Relatório de Acessórios\n")
-#         f.write("========================\n\n")
-#         for key, value in assesorios.items():
-#             f.write("{}: {}\n".format(key, value))
-#     os.startfile(filepath) 
-# except Exception as e:
-#     pass
 filename = 'Data.csv'
 desktop = os.path.join(os.path.expanduser("~"), "Desktop")
 filepath = os.path.join(desktop, filename)
@@ -422,5 +458,3 @@ write_csv(filepath, finalData)
 
 window = DataGridWindow(finalData)
 window.ShowDialog()
-# else:
-#     forms.alert("Nenhum elemento PVC com o parâmetro encontrado.", title="Resultado da Busca", warn_icon=True)

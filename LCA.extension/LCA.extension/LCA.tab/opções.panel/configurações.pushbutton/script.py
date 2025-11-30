@@ -4,7 +4,6 @@ from System.Windows import Window, Thickness, FontWeights, HorizontalAlignment, 
 from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, TextBox, Button, Orientation
 from System.Windows import HorizontalAlignment, VerticalAlignment, TextAlignment
 from data import dataPerKg, salvar_dataPerKg
-from System.Windows.Input import TextCompositionEventArgs
 import re
 
 class LCAWindow(Window):
@@ -129,7 +128,6 @@ class LCAWindow(Window):
                 on_Edit
             ))
 
-
     def __make_present_item(self, text, on_delet, on_edit):
         grid = Grid()
         grid.Margin = Thickness(0,10,0,0)
@@ -173,7 +171,6 @@ class LCAWindow(Window):
         grid.Children.Add(btn_stack)
 
         return grid
-
 
     def _make_label(self, text, row, col, bold=False):
         label = Label()
