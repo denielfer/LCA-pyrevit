@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from pyrevit import revit
 from System.Windows import Window, Thickness, FontWeights, HorizontalAlignment, VerticalAlignment, GridLength, GridUnitType
-from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, TextBox, Button
+from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, TextBox, Button, Orientation
 from System.Windows import HorizontalAlignment, VerticalAlignment, TextAlignment
-from data import dataPerKg
+from data import dataPerKg, salvar_dataPerKg
 from System.Windows.Input import TextCompositionEventArgs
 import re
 
@@ -13,12 +13,14 @@ class LCAWindow(Window):
         self.MaxWidth = 1280
         self.MaxHeight = 720
         self.Margin = Thickness(10)
+        self.headers = ["A1-A3","A4","A5","C1","C2","C3","C4","D"]
+        self.__render_()
 
+    def __render_(self):
         self.textboxes = {}
 
         # Create grid
         grid = Grid()
-        self.headers = ["A1-A3","A4","A5","C1","C2","C3","C4","D"]
         
 
         colDef = ColumnDefinition()
@@ -85,6 +87,7 @@ class LCAWindow(Window):
         tb.VerticalAlignment = VerticalAlignment.Center
         tb.TextAlignment = TextAlignment.Center
         stack.Children.Add(tb)
+        self.label_textButton = tb
 
         stack.Children.Add(grid)
 
@@ -97,6 +100,79 @@ class LCAWindow(Window):
         Grid.SetRow(btn, 3)
         Grid.SetColumnSpan(btn, len(self.headers))
         stack.Children.Add(btn)
+        self.__make_itens(stack)
+    
+    def __make_itens(self, stack):
+        def on_Delete(code):
+            for metric in dataPerKg:
+                if (code in dataPerKg[metric]['data']):
+                    del dataPerKg[metric]['data'][code]
+            self.__render_()
+                    
+        def on_Edit(code):
+            for n,metric in enumerate(dataPerKg, start=1):
+                if (code in dataPerKg[metric]['data']):
+                    for m,stage in enumerate(self.headers, start=1):
+                        self.textboxes[self.__get_textBox_key(n, m)].Text = str(dataPerKg[metric]['data'][code][stage])
+                    self.label_textButton.Text = code
+        
+        desc_added = []
+        for metric in dataPerKg:
+            for desc in dataPerKg[metric]['data']:
+                desc_added.append(desc)
+        desc_set = set(desc_added)
+        
+        for metric in desc_set:
+            stack.Children.Add(self.__make_present_item(
+                metric,
+                on_Delete,
+                on_Edit
+            ))
+
+
+    def __make_present_item(self, text, on_delet, on_edit):
+        grid = Grid()
+        grid.Margin = Thickness(0,10,0,0)
+
+        col_text = ColumnDefinition()
+        col_text.Width = GridLength(4.0, GridUnitType.Star)
+        grid.ColumnDefinitions.Add(col_text)
+
+        col_buttons = ColumnDefinition()
+        col_buttons.Width = GridLength(1.0, GridUnitType.Star)
+        grid.ColumnDefinitions.Add(col_buttons)
+
+        tb = Label()
+        tb.Content = text
+        tb.Margin = Thickness(5)
+        tb.HorizontalAlignment = HorizontalAlignment.Left
+        tb.VerticalAlignment = VerticalAlignment.Center
+        tb.FontWeight = FontWeights.Bold
+        
+        Grid.SetColumn(tb, 0)
+        grid.Children.Add(tb)
+
+        btn_stack = StackPanel()
+        btn_stack.Orientation = Orientation.Horizontal
+        btn_stack.HorizontalAlignment = HorizontalAlignment.Right
+        Grid.SetColumn(btn_stack, 1)
+
+        btn_edit = Button()
+        btn_edit.Content = "Editar"
+        btn_edit.Margin = Thickness(2)
+        btn_edit.Click += lambda s, e: on_edit(text)
+
+        btn_delete = Button()
+        btn_delete.Content = "Deletar"
+        btn_delete.Margin = Thickness(2)
+        btn_delete.Click += lambda s, e: on_delet(text)
+
+        btn_stack.Children.Add(btn_edit)
+        btn_stack.Children.Add(btn_delete)
+
+        grid.Children.Add(btn_stack)
+
+        return grid
 
 
     def _make_label(self, text, row, col, bold=False):
@@ -129,6 +205,18 @@ class LCAWindow(Window):
                 if not sci_notation_pattern.match(new_text):
                     e.Handled = True
             
+            def on_focus(sender, args):
+                if label.Text == "0":
+                    label.Text = ""
+
+            def on_lost_focus(sender, args):
+                if label.Text == "":
+                    label.Text = "0"
+
+            label.GotFocus += on_focus
+            label.LostFocus += on_lost_focus
+
+            
             label.PreviewTextInput += only_numbers
 
         Grid.SetRow(label, row)
@@ -139,10 +227,23 @@ class LCAWindow(Window):
         return '{} - {}'.format(row, col)
 
     def on_generate(self, sender, args):
+        try:
+            for n,metric in enumerate(dataPerKg, start=1):
+                dataPerKg[metric]['data'][self.label_textButton.Text] = {
+                    "A1-A3": float(self.textboxes[self.__get_textBox_key(n, 1)].Text),
+                    "A4": float(self.textboxes[self.__get_textBox_key(n, 2)].Text),
+                    "A5": float(self.textboxes[self.__get_textBox_key(n, 3)].Text),
+                    "C1": float(self.textboxes[self.__get_textBox_key(n, 4)].Text),
+                    "C2": float(self.textboxes[self.__get_textBox_key(n, 5)].Text),
+                    "C3": float(self.textboxes[self.__get_textBox_key(n, 6)].Text),
+                    "C4": float(self.textboxes[self.__get_textBox_key(n, 7)].Text),
+                    "D": float(self.textboxes[self.__get_textBox_key(n, 8)].Text),
+                }
+            salvar_dataPerKg()
+            self.__render_()
+        except Exception as e:
+            print(e)
 
-        for n,metric in enumerate(dataPerKg, start=1):
-            # print("{}: ".format(metric, ...[ self.textboxes[self.__get_textBox_key(n, m)] for m in range(len(self.headers)) ]))
-            print("{}: {} {} {} {} {} {} {} {}".format(metric, *[ self.textboxes[self.__get_textBox_key(n, m+1)].Text for m in range(len(self.headers)) ]))
 
 # Run window
 LCAWindow().ShowDialog()
