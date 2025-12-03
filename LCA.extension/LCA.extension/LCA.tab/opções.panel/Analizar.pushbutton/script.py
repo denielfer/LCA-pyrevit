@@ -3,7 +3,7 @@ from pyrevit import revit, DB, forms, script
 import math
 from System.Windows import Window, Thickness, FontWeights, HorizontalAlignment, VerticalAlignment, GridLength, GridUnitType
 from System.Windows.Controls import Label, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, StackPanel
-from System.Windows.Media import RotateTransform
+from System.Windows.Media import RotateTransform, Brushes
 import data
 import acessories
 from Autodesk.Revit.DB import FilteredElementCollector, BuiltInCategory
@@ -130,7 +130,7 @@ def coletar_assesorios():
 class DataGridWindow(Window):
     colsName = ["A1-A3", "A4", "A5", "C1", "C2", "C3", "C4", "D"]
     colsName_tooltip = ["Produção", "Transporte", "Instalação", "Demolição", "Transporte", "Processamento \nde resíduos", "Destinação final", "Estágio \nde Recuperação"]
-    def __init__(self, data_dict):
+    def __init__(self, data_dict, filepath, hasCreated):
         super(DataGridWindow, self).__init__()
         self.Title = "Resumo dos Tubos"
         self.MaxWidth = 1280
@@ -149,6 +149,19 @@ class DataGridWindow(Window):
         grid = self._make_baseTable(data_dict)
         stack.Children.Add(grid)
         
+        label = Label()
+        label.Margin = Thickness(5, 20, 0, 0)
+        label.HorizontalAlignment = HorizontalAlignment.Left
+        label.VerticalAlignment = VerticalAlignment.Center
+        stack.Children.Add(label)
+        if hasCreated:
+            label.Content = "Um arquivos foi criado com esses dados em {}".format(filepath)
+            label.Foreground = Brushes.Green
+        else:
+            label.Content = "Não foi possivel criar um arquivo com esses dados"
+            label.Foreground = Brushes.Red
+
+
         grid = self._build_system_boundaries_table()
         stack.Children.Add(grid)
 
@@ -224,11 +237,13 @@ class DataGridWindow(Window):
                     cur_col += 1
                 current_row+=1
         
+        grid.RowDefinitions.Add(RowDefinition())
         return grid
 
     def create_vertical_header(self, text):
         tb = Label()
         tb.Width = 120
+        tb.Height = 100
         tb.Content = text
         tb.LayoutTransform = RotateTransform(270)
         tb.Margin = Thickness(5)
@@ -450,11 +465,21 @@ def write_csv(filename, data_dict):
                     val = subVal.get(fase, 0)
                     row.append("{:.2f}".format(val) if isinstance(val, float) else str(val))
                 writer.writerow(row)
+hasCreate = False
+filepath = ''
+try:
+    filename = 'Data.csv'
+    
+    desktop = os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+    filepath = os.path.join(desktop, filename)
+    write_csv(filepath, finalData)
+    hasCreate = True
+    import subprocess
 
-filename = 'Data.csv'
-desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-filepath = os.path.join(desktop, filename)
-write_csv(filepath, finalData)
+    subprocess.run(['start', '', filepath], shell=True)
 
-window = DataGridWindow(finalData)
+except Exception:
+    pass
+
+window = DataGridWindow(finalData, filepath, hasCreate)
 window.ShowDialog()
