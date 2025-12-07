@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
-from pyrevit import revit, DB, forms, script
+from pyrevit import revit, DB
 import math
 from System.Windows import Window, Thickness, FontWeights, HorizontalAlignment, VerticalAlignment, GridLength, GridUnitType
 from System.Windows.Controls import Label, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, StackPanel
 from System.Windows.Media import RotateTransform, Brushes
+from System.Windows.Controls import Canvas, ToolTip
+from System.Windows.Shapes import Rectangle
+from System.Windows.Media import Brushes
+from System.Windows.Input import Cursors
+import copy
 import data
 import acessories
-from Autodesk.Revit.DB import FilteredElementCollector, BuiltInCategory
 import csv
 import os
 
@@ -129,12 +133,21 @@ def coletar_assesorios():
 
 class DataGridWindow(Window):
     colsName = ["A1-A3", "A4", "A5", "C1", "C2", "C3", "C4", "D"]
+    brushes_vector = [
+        Brushes.SkyBlue,
+        Brushes.Orange,
+        Brushes.Green,
+        Brushes.Purple,
+        Brushes.Red,
+        Brushes.Gray
+    ]
     colsName_tooltip = ["Produção", "Transporte", "Instalação", "Demolição", "Transporte", "Processamento \nde resíduos", "Destinação final", "Estágio \nde Recuperação"]
     def __init__(self, data_dict, filepath, hasCreated):
         super(DataGridWindow, self).__init__()
         self.Title = "Resumo dos Tubos"
         self.MaxWidth = 1280
         self.MaxHeight = 720
+        self.metricData = {}
 
         scroll_viewer = ScrollViewer()
         scroll_viewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto
@@ -208,8 +221,15 @@ class DataGridWindow(Window):
 
         for (key, data_val) in data_dict.items():
             grid.RowDefinitions.Add(RowDefinition())
-            grid.Children.Add(self._make_label("{}".format(key), current_row, 0, bold=True))
-            grid.Children.Add(self._make_label("{}".format(data_val['unit']), current_row, 1, bold=True))
+            
+            self.metricData[key] = {
+                'data': copy.deepcopy(data_val['data']),
+                'is_click': False,
+                'unit': data_val['unit'],
+            }
+            
+            grid.Children.Add(self._make_label("{}".format(key), current_row, 0, bold=True, brush=Brushes.LightGray, on_cLick = lambda s, e: self.__show_simple_bars(s.Content)))
+            grid.Children.Add(self._make_label("{}".format(data_val['unit']), current_row, 1, bold=True, brush=Brushes.LightGray))
             totals = data_val['total']
             cur_col = 2
             for fase in DataGridWindow.colsName:
@@ -217,15 +237,17 @@ class DataGridWindow(Window):
                 if (fase in totals):
                     total = totals[fase]
                 total_str = "{:.2f}".format(total) if type(total) == float else "{}".format(total)
-                grid.Children.Add(self._make_label(total_str, current_row, cur_col))
+                grid.Children.Add(self._make_label(total_str, current_row, cur_col, brush=Brushes.LightGray))
                 cur_col += 1
             current_row+=1
 
-            for (subKey, susbVal) in data_val['data'].items():
-                grid.RowDefinitions.Add(RowDefinition())
-                grid.Children.Add(self._make_label("\t{}:".format(subKey), current_row, 0))
+            for inner_row_index, (subKey, susbVal) in enumerate(data_val['data'].items()):
+                bg_brush = Brushes.White if (inner_row_index % 2 == 0) else Brushes.Gainsboro
                 
-                grid.Children.Add(self._make_label("{}".format(data_val['unit']), current_row, 1, bold=True))
+                grid.RowDefinitions.Add(RowDefinition())
+                grid.Children.Add(self._make_label("\t{}:".format(subKey), current_row, 0, brush=bg_brush))
+                
+                grid.Children.Add(self._make_label("{}".format(data_val['unit']), current_row, 1, bold=True, brush=bg_brush))
                 cur_col = 2
                 
                 for fase in DataGridWindow.colsName:
@@ -233,12 +255,97 @@ class DataGridWindow(Window):
                     if (fase in susbVal):
                         val = susbVal[fase]
                     val_str = "{:.2f}".format(val) if type(val) == float else "{}".format(val)
-                    grid.Children.Add(self._make_label(val_str, current_row, cur_col))
+                    grid.Children.Add(self._make_label(val_str, current_row, cur_col, brush=bg_brush))
                     cur_col += 1
                 current_row+=1
         
         grid.RowDefinitions.Add(RowDefinition())
         return grid
+
+    def __show_simple_bars(self, key):
+        data = self.metricData[key]['data']
+        unit = self.metricData[key]['unit']
+        win = Window()
+        win.Title = "{}".format(key)
+        win.Width = 800
+        win.Height = 600
+
+        scroll_viewer = ScrollViewer()
+        scroll_viewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        win.Content = scroll_viewer
+
+        canvas = Canvas()
+        canvas.Width = 800
+        canvas.Height = 500
+        scroll_viewer.Content = canvas
+
+        bar_height = 30
+        spacing = 10
+        label_width = 100
+        scale = 5
+
+        title_label = Label()
+        title_label.Content = key
+        title_label.FontSize = 18
+        title_label.FontWeight = FontWeights.Bold
+        title_label.HorizontalContentAlignment = HorizontalAlignment.Center
+        title_label.Width = canvas.Width
+
+        Canvas.SetLeft(title_label, 0)
+        Canvas.SetTop(title_label, 5)
+        canvas.Children.Add(title_label)
+
+        top_offset = 40
+
+        for i, cat in enumerate(self.colsName):
+            total = sum(data[s].get(cat, 0) for s in data)
+            left = label_width
+
+            cat_label = Label()
+            cat_label.Content = cat
+            cat_label.Margin = Thickness(5, top_offset + i * (bar_height + spacing), 0, 0)
+            cat_label.Width = label_width - 10
+            cat_label.HorizontalAlignment = HorizontalAlignment.Left
+            canvas.Children.Add(cat_label)
+
+            for n, series in enumerate(data.keys()):
+                color = DataGridWindow.brushes_vector[n % len(DataGridWindow.brushes_vector)]
+                val = data[series].get(cat, 0)
+                pct = float(val / total * 100) if total > 0 else 0
+                rect_width = pct * scale
+                rect = Rectangle()
+                rect.Width = rect_width
+                rect.Height = bar_height
+                rect.Fill = color
+                tooltip_text = "{}\nValue: {:.2f} {}\nPercent: {:.2f}%".format(series, float(val), unit, float(pct))
+                rect.ToolTip = ToolTip(Content=tooltip_text)
+                Canvas.SetLeft(rect, left)
+                Canvas.SetTop(rect, top_offset + i * (bar_height + spacing))
+                canvas.Children.Add(rect)
+                left += rect_width
+
+        legend_top = top_offset + len(self.colsName) * (bar_height + spacing) + 20
+        legend_left = label_width
+        legend_spacing = 20
+
+        for n, series in enumerate(data.keys()):
+            color = DataGridWindow.brushes_vector[n % len(DataGridWindow.brushes_vector)]
+
+            rect = Rectangle()
+            rect.Width = 20
+            rect.Height = 20
+            rect.Fill = color
+            Canvas.SetLeft(rect, legend_left)
+            Canvas.SetTop(rect, legend_top + n * legend_spacing)
+            canvas.Children.Add(rect)
+
+            lbl = Label()
+            lbl.Content = series
+            Canvas.SetLeft(lbl, legend_left + 25)
+            Canvas.SetTop(lbl, legend_top + n * legend_spacing - 2)
+            canvas.Children.Add(lbl)
+
+        win.ShowDialog()
 
     def create_vertical_header(self, text):
         tb = Label()
@@ -251,14 +358,36 @@ class DataGridWindow(Window):
         tb.VerticalAlignment = VerticalAlignment.Center
         return tb
 
-    def _make_label(self, text, row, col, bold=False):
+    def _make_label(self, text, row, col, brush = None, bold=False, on_cLick = None):
         label = Label()
         label.Content = text
         label.Margin = Thickness(5)
-        label.HorizontalAlignment = HorizontalAlignment.Left
+        label.HorizontalAlignment = HorizontalAlignment.Stretch
         label.VerticalAlignment = VerticalAlignment.Center
+        if brush is not None:
+            label.Background  = brush
         if bold:
             label.FontWeight = FontWeights.Bold
+        if on_cLick is not None:
+            self.metricData[text]['is_click'] = False
+            def mouseDown(s, e):
+                self.metricData[text]['is_click'] = True
+            def mouseUp(s, e):
+                if (self.metricData[text]['is_click']):
+                    self.metricData[text]['is_click']=False
+                    on_cLick(s, e)
+            def on_enter(s, e):
+                label.Cursor = Cursors.Hand
+                label.Foreground = Brushes.White
+
+            def on_leave(s, e):
+                label.Cursor = Cursors.Arrow
+                label.Foreground = Brushes.Black
+
+            label.MouseEnter += on_enter
+            label.MouseLeave += on_leave
+            label.MouseLeftButtonDown += mouseDown
+            label.MouseLeftButtonUp += mouseUp
         Grid.SetRow(label, row)
         Grid.SetColumn(label, col)
         return label
@@ -389,7 +518,7 @@ metricsData = {
 
 for resultKey, resultVal in resultados.items():
     # TotalMass = resultados.volTotal * FEAT_TO_METER_MUTIPLY * PVC_DENSITY
-    TotalMass = resultVal[VOLNAME] * PVC_DENSITY_Map[resultKey]
+    TotalMass = resultVal[VOLNAME] * PVC_DENSITY_Map.get(resultKey, 1400)
 
     for (key, val) in finalDataDecode.items():
         toAddVal = resultVal[key]
@@ -425,8 +554,8 @@ for peformaceName, peformaceData in data.dataPerKg.items():
             curData[pipeData][estage] += metricsData[FINAL_DATA_MASS_KEY]['data'][pipeData] * pipePeformaceData[estage]
 
         if (pipeData in pipe_acessories_map):
-            curData['{} - Acessorios'.format(pipeData)] = {}
-            curAccessoryData = curData['{} - Acessorios'.format(pipeData)]
+            curData['{} - Acessorios e Conexões'.format(pipeData)] = {}
+            curAccessoryData = curData['{} - Acessorios e Conexões'.format(pipeData)]
             for accessory in pipe_acessories_map[pipeData]:
                 if (accessory in acessories.dataAcessories):
                     accessoryMass = acessories.dataAcessories[accessory] * pipe_acessories_map[pipeData][accessory]

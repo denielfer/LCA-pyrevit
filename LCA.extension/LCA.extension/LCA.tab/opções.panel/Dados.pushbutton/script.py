@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from pyrevit import revit
+from System import Uri
+from System.Windows.Documents import Hyperlink
+from System.Diagnostics import Process, ProcessStartInfo
 from System.Windows import Window, Thickness, FontWeights, HorizontalAlignment, VerticalAlignment, GridLength, GridUnitType
-from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, TextBox, Button, Orientation
+from System.Windows.Controls import Label, StackPanel, Grid, ColumnDefinition, RowDefinition, ScrollViewer, ScrollBarVisibility, TextBox, Button, Orientation, TextBlock
 from System.Windows import HorizontalAlignment, VerticalAlignment, TextAlignment
 from data import dataPerKg, salvar_dataPerKg
 import re
@@ -64,6 +67,23 @@ class LCAWindow(Window):
         stack.Margin = Thickness(10)
         stack.VerticalAlignment = VerticalAlignment.Top
         scroll_viewer.Content = stack
+
+        
+        link_textblock = TextBlock()
+        hyperlink = Hyperlink()
+        hyperlink.NavigateUri = Uri("https://www.epdbrasil.com.br/")
+        hyperlink.Inlines.Add("EPD Brasil")
+
+
+        def on_request_navigate(sender, e):
+            psi = ProcessStartInfo(e.Uri.AbsoluteUri)
+            psi.UseShellExecute = True
+            Process.Start(psi)
+            e.Handled = True
+
+        hyperlink.RequestNavigate += on_request_navigate
+        link_textblock.Inlines.Add(hyperlink)
+        stack.Children.Add(link_textblock)
 
 
         tb = TextBox()
